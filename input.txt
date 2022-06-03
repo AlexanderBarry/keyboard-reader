@@ -1,9 +1,9 @@
 "key","presses"
-"Enter",19
-"S",15
+"Enter",21
+"S",17
 "W",10
 "X",8
-"T",41
+"T",45
 "G",1
 "N",17
 "L",6
@@ -19,12 +19,12 @@
 "D",6
 "Up",1
 "LAlt",19
-"Backspace",44
+"Backspace",45
 "LControl",34
 "F",3
 "Down",2
 "LShift",5
-"E",27
+"E",29
 "Escape",3
 "M",6
 "P",22
