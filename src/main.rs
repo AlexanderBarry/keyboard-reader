@@ -1,56 +1,71 @@
-use device_query::{DeviceEvents, DeviceState};
-use std::fs::{OpenOptions, read_to_string, File};
+use device_query::{DeviceState, DeviceQuery, Keycode};
+use std::collections::{HashSet, HashMap};
+use std::fs::{OpenOptions, File, read_to_string};
 use std::io::Write;
 use std::path::Path;
-use std::thread::sleep;
-use std::time;
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::{thread, time};
 
 const FILE_NAME: &str = "input.txt";
 
 fn main() {
-    let key_presses: Mutex<HashMap<String, u32>> = Mutex::from(read_file());
+    // holds the key presses
+    let mut key_presses: HashMap<String, u32> = read_file();
 
-    // Stuff to get the keypresses
-    let device_state = DeviceState::default();
+    // Keeps track of device state
+    let device_state = DeviceState::new();
+    
+    // Sleep duration
+    let sleep_time = time::Duration::from_millis(25);
 
-    // Bascially guards for when a key press occurs
-    let _guard = device_state.on_key_down(move |key| {
-        let mut k_p = key_presses.lock().unwrap();
-        {
-            let num_pressed = k_p.entry(key.to_string()).or_insert(0);
+    // used for finding when a key is actually pressed
+    let mut old_key_state: HashSet<Keycode> = HashSet::new();
+
+    loop{
+        let new_presses = update_presses(
+            device_state.get_keys(),
+            &mut old_key_state, 
+            &mut key_presses
+        );
+
+        if new_presses == true{
+            save_presses_to_file(&key_presses);
+        }
+        
+        thread::sleep(sleep_time);
+    }
+}
+
+fn update_presses(
+    current_keys: Vec<Keycode>, 
+    old: &mut HashSet<Keycode>, 
+    presses: &mut HashMap<String, u32>
+) -> bool {
+    // hashset that will keep track of current keys
+    let mut current = HashSet::new();
+
+    // tracks if there were new presses
+    let mut new_keydown = false;
+
+    // loop throught the keys currently being pressed
+    for key in current_keys{
+
+        // Checks for if there was a new press 
+        if !old.contains(&key){
+            // If there was a new press then update the presses
+            new_keydown = true;
+            let num_pressed = presses.entry(key.to_string()).or_insert(0);
             *num_pressed += 1;
             println!("{} times pressed: {}", key.to_string(), num_pressed);
         }
-    
-        match save_info_to_file(k_p.clone()){
-            Ok(_) => println!("the file was updated"),
-            Err(_) => panic!("Something went wrong with the file"),
-        }
-    });
 
-    // todo figure out multithreading so that key presses are 
-    // todo accessible across multiple threads
-
-    // let _guard = device_state.on_mouse_down(move |key| {
-    //     let mouse_str = format!("Mouse #{}", &key.to_string());
-    //     let mut k_p = key_presses.lock().unwrap();
-    //     {
-    //         let num_pressed = k_p.entry(mouse_str).or_insert(0);
-    //         *num_pressed += 1;
-    //         println!("{} times pressed: {}", key.to_string(), num_pressed);
-    //     }
-    
-    //     save_info_to_file(k_p.clone());
-    // });
-    
-    let sleep_time = time::Duration::from_secs(1);
-    loop {
-        sleep(sleep_time)   
+        // update the current hash
+        current.insert(key);
     }
 
-    
+    // update the old hashset
+    *old = current;
+
+    new_keydown
 }
 
 fn read_file() -> HashMap<String, u32> {
@@ -85,22 +100,31 @@ fn read_file() -> HashMap<String, u32> {
     key_pressed
 }
 
-fn save_info_to_file(key_presses: HashMap<String, u32> ) -> Result<(), std::io::Error>{
+/// Saves key presses to file in a csv format
+fn save_presses_to_file(key_presses: &HashMap<String, u32> ) {
+    // gets the file
     let mut f = OpenOptions::new()
             .write(true)
             .create(true)
-            .open(FILE_NAME)?;
+            .open(FILE_NAME)
+            .expect("The file could not be opened");
 
 
+    // string that will be written to the file
     let mut file_output: String = String::from("\"key\",\"presses\"\n");
 
+    // adds each key info to the file string
     for (key, presses) in key_presses{
         file_output.push_str(
             &format!("\"{}\",{}\n",key, presses)
         );
     }
     
-    f.write_all(file_output.as_bytes())?;
-    Ok(())
+    // writes the info to the file
+    f.write_all(file_output.as_bytes())
+        .expect("error writing to file");
+
+    println!("saved presses to file");
 }
+
 
