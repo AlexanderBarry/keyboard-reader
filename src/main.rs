@@ -1,23 +1,21 @@
 use device_query::{DeviceEvents, DeviceState};
-use std::fs::{OpenOptions, read_to_string};
-use std::io::{Write, Read};
+use std::fs::{OpenOptions, read_to_string, File};
+use std::io::Write;
+use std::path::Path;
 use std::thread::sleep;
-use std::{time, fs};
+use std::time;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 const FILE_NAME: &str = "input.txt";
 
 fn main() {
-    let key_presses: Mutex<HashMap<String, u32>> = Mutex::new(HashMap::new());
+    let key_presses: Mutex<HashMap<String, u32>> = Mutex::from(read_file());
+
+    // Stuff to get the keypresses
     let device_state = DeviceState::default();
 
-    // todo create a read_file function that reads the previous key_presses if desired
-    match create_file(){
-        Ok(_) => println!("everything went great"),
-        Err(_) => panic!("something went wrong with the file creation"),
-    }
-
+    // Bascially guards for when a key press occurs
     let _guard = device_state.on_key_down(move |key| {
         let mut k_p = key_presses.lock().unwrap();
         {
@@ -49,18 +47,26 @@ fn main() {
     
     let sleep_time = time::Duration::from_secs(1);
     loop {
-        sleep(sleep_time)
+        sleep(sleep_time)   
     }
 
     
 }
 
-fn read_file() -> Result<HashMap<String, u32>, std::io::Error>{
-    // Read the file_string
-    let data = read_to_string(FILE_NAME)?;
+fn read_file() -> HashMap<String, u32> {
+    // Make sure the file exists
+    if Path::new(FILE_NAME).exists() == false{
+        File::create(FILE_NAME).unwrap();
+    }
+
+    // Read the file_string and get rid of extra quotations
+    let data = read_to_string(FILE_NAME)
+        .unwrap()
+        .replace('\"', "");
 
     // Convert the file data to a useable iterator
-    let data_iter = data.lines()
+    let data_iter = data
+        .lines()
         .into_iter()
         .skip(1) // Skip because of the "key", "pressed"
         .map(|s| s.split(",").collect::<Vec<&str>>())
@@ -74,24 +80,16 @@ fn read_file() -> Result<HashMap<String, u32>, std::io::Error>{
     for (key, pressed) in data_iter{
         key_pressed.insert(key, pressed);
     }
-        
-    // return the okay result
-    Ok(key_pressed)
-}
 
-fn create_file() -> Result<(), std::io::Error> {
-    fs::remove_file("input.txt")?;
-    OpenOptions::new()
-        .create(true)
-        .open("input.txt")?;
-    Ok(())
+    // return the result
+    key_pressed
 }
 
 fn save_info_to_file(key_presses: HashMap<String, u32> ) -> Result<(), std::io::Error>{
     let mut f = OpenOptions::new()
             .write(true)
             .create(true)
-            .open("input.txt")?;
+            .open(FILE_NAME)?;
 
 
     let mut file_output: String = String::from("\"key\",\"presses\"\n");
